@@ -50,7 +50,10 @@ Then add this to your `.bashrc`
 ```bash
 alias workon_arm="cd ~/arm_ros2_ws && source arm_env/bin/activate && source install/setup.bash"
 ```
-
+Now whenever you run `workon_arm` you will be able to get into the environment. To exit it just run:
+```bash
+deactivate
+```
 5. Build the workspace
 ```bash
 colcon build --symlink-install
