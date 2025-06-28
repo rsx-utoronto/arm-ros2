@@ -176,5 +176,11 @@ If migrating custom `msg/`, `srv/`, or `action/` files:
   Example: (https://docs.google.com/document/d/1crGv72SZPlyTfEEYrCo4EamMKkqWRGyadf1QlVXck3k/edit?tab=t.0)
 
 
+# Resources 
+Feel free to add any resources here: 
+
+1. Renard, E. (2024). ROS 2 from scratch : get started with ROS 2 and create robotics applications with Python and C++ (1st edition.). Packt Publishing Ltd. (Access through UofT library)
+2. How to make a `requirements.txt`: https://www.geeksforgeeks.org/python/how-to-create-requirements-txt-file-in-python/
+3. Python virtual environment stuff: https://medium.com/ros2-tips-and-tricks/running-ros2-nodes-in-a-python-virtual-environment-b31c1b863cdb
 
 
