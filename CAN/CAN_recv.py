@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 
 from CAN_utilities import *
-import rospy
+import rclpy
+from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray, UInt8MultiArray
 
-class CAN_Recv():
+class CAN_Recv(Node):
     """
     (None)
 
@@ -13,26 +14,21 @@ class CAN_Recv():
     """
 
     def __init__(self):
-        #self.pub_rate           = 100000000
-
+        super().__init__('CAN_Recv')
+        
         # Attributes to hold data from publishers or to publish
-
         self.CURR_POS 			= [0, 0, 0, 0, 0, 0, 0] # ADDED BACK 7TH MOTOR
         self.CURR_ANGLE         = [0, 0, 0, 0, 0, 0, 0] # ADDED BACK 7TH MOTOR
         self.MOTOR_CURR 		= [0, 0, 0, 0, 0, 0, 0] # ADDED BACK 7TH MOTOR
         self.LIMIT_SWITCH 		= [0, 0, 0, 0, 0, 0, 0] # ADDED BACK 7TH MOTOR
 
-        # Variables for ROS publishers and subscribers
-        self.Angles_pub 		= rospy.Publisher('arm_curr_pos', Float32MultiArray, queue_size=0)
-        self.Motor_pub 			= rospy.Publisher('arm_motor_curr', Float32MultiArray, queue_size=0)
-        self.LMS_pub 			= rospy.Publisher('arm_limit_switch', UInt8MultiArray, queue_size=0)
+        # Variables for ROS publishers
+        self.Angles_pub 		= self.create_publisher(Float32MultiArray, 'arm_curr_pos', 1)
+        self.Motor_pub 			= self.create_publisher(Float32MultiArray, 'arm_motor_curr', 1)
+        self.LMS_pub 			= self.create_publisher(UInt8MultiArray, 'arm_limit_switch', 1)
 
-        # ROS
-        try:
-            self.read_msgs()
-        except rospy.ROSInterruptException:
-            print("Exception Occured")
-            pass
+        # Create a timer to read CAN messages at high frequency
+        self.timer = self.create_timer(0.001, self.read_msgs_callback)  # 1000 Hz
 
 
     def read_message_from_spark(self, msg : can.Message):
@@ -97,43 +93,31 @@ class CAN_Recv():
 
 
 
-    def read_msgs(self):
-        # Set publishing rate to 10hz
-        #rate = rospy.Rate(self.pub_rate)
+    def read_msgs_callback(self):
+        """
+        Timer callback function for reading CAN messages at high frequency
+        """
 
-        # Start the infinite loop
-        while not rospy.is_shutdown():
+        # Read and process messages
+        msg = BUS.recv(timeout=0.0001) # Non-blocking approach - better for ROS2
+        if msg:
+            self.read_message_from_spark(msg= msg)
 
-            # Read and process messages
-            msg                     = BUS.recv(timeout= 1)
-            if msg:
-                self.read_message_from_spark(msg= msg)
+            # Publish most recent limit switch data
+            limit_switch_msg        = UInt8MultiArray()
+            limit_switch_msg.data   = self.LIMIT_SWITCH
+            self.LMS_pub.publish(limit_switch_msg)
 
-                # Publish most recent limit switch data
-                limit_switch_msg        = UInt8MultiArray()
-                limit_switch_msg.data   = self.LIMIT_SWITCH
-                self.LMS_pub.publish(limit_switch_msg)
-
+            # Publish most recent motor current position data
+            MOTOR_CURR_msg          = Float32MultiArray()
+            MOTOR_CURR_msg.data     = self.MOTOR_CURR
+            self.Motor_pub.publish(MOTOR_CURR_msg)
             
+            # Publish most recent current position data
+            curr_angles_msg         = Float32MultiArray() 
+            curr_angles_msg.data    = self.CURR_ANGLE
+            self.Angles_pub.publish(curr_angles_msg)
 
-                # Publish most recent motor current position data
-                MOTOR_CURR_msg          = Float32MultiArray()
-                MOTOR_CURR_msg.data     = self.MOTOR_CURR
-                self.Motor_pub.publish(MOTOR_CURR_msg)
-                
-            
-
-                # Publish most recent current position data
-                curr_angles_msg         = Float32MultiArray() 
-                curr_angles_msg.data    = self.CURR_ANGLE
-                self.Angles_pub.publish(curr_angles_msg)
-
-
-            # Control rate
-            #rate.sleep()
-        
-        # # Stop the heartbeat when ROS is killed
-        # task.stop()
 
 
 if __name__=="__main__":
@@ -155,10 +139,16 @@ if __name__=="__main__":
     # print("Heartbeat initiated")
 
     # Initialize node
-    rospy.init_node('CAN_Recv')
+    rclpy.init()
 
     # Setup and run node
-    CAN_Recv_node = CAN_Recv()
+    CAN_Recv_node = Node('CAN_Recv')
 
-    # Spin to keep node alive
-    rospy.spin()
+    try:
+        rclpy.spin(CAN_Recv_node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        # Destroy the node explicitly
+        CAN_Recv_node.destroy_node()
+        rclpy.shutdown()
