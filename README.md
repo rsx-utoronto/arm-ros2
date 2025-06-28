@@ -162,7 +162,7 @@ If migrating custom `msg/`, `srv/`, or `action/` files:
       ros2 run arm_ros2 <node>
       ros2 topic echo /<topic>
       ```
-  - Track progress with an issue board (e.g., "Migrate node X", "Convert launch file Y").
+- Track progress with an issue board (e.g., "Migrate node X", "Convert launch file Y").
 
 # Collaboration Code of Conduct:
 
