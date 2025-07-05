@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 
-import rospy
+import rclpy
+from rclpy.node import Node
+
 from sensor_msgs.msg import Joy
 from std_msgs.msg import String, UInt8
 from rover.msg import ArmInputs
+
 # import arm_serial_connector as arm_serial
 #from rover.srv import Corrections
 
@@ -13,7 +16,7 @@ subscribes: Joy
 rosservice: correction
 '''
 
-class Controller():
+class Controller(Node):
     """
     (None)
 
@@ -22,6 +25,7 @@ class Controller():
     """
 
     def __init__(self):
+        super().__init__("Arm_Controller")
 
         ## Attributes to hold data for publishing to topics
         # Attribute to publish state
@@ -29,6 +33,19 @@ class Controller():
 
         # Attribute to store/publish killswitch value
         self.killswitch          = 0
+
+        ## Attribute to store servo state
+        # state -> angle:
+        # 0 -> 63 degrees
+        # 1 -> 84 degrees
+        self.servo               = 0
+
+        ## Atrribute to store on/off state of gripper motor
+        # state -> angle:
+        # 0 -> off
+        # 1 -> on
+        self.gripper             = 0
+
 
         # Attribute to publish arm inputs (with initialized values)
         self.values              = ArmInputs()
@@ -43,23 +60,16 @@ class Controller():
         self.values.x            = 0
         self.values.o            = 0
 
-        ## Attribute to store servo state
-        # state -> angle:
-        # 0 -> 63 degrees
-        # 1 -> 84 degrees
-        self.servo               = 0
 
-        ## Atrribute to store on/off state of gripper motor
-        # state -> angle:
-        # 0 -> off
-        # 1 -> on
-        self.gripper             = 0
+        # Publishers
+        self.state_pub = self.create_publisher(String, "arm_state", 10)
+        self.input_pub = self.create_publisher(ArmInputs, "arm_inputs", 10)
+        self.killswitch_pub = self.create_publisher(UInt8, "arm_killswitch", 10)
 
-        ## Variables for ROS publishers and subscrives
-        self.joy_sub             = rospy.Subscriber("arm/joy", Joy, self.getROSJoy)
-        self.state_pub           = rospy.Publisher("arm_state", String, queue_size=0)
-        self.input_pub           = rospy.Publisher("arm_inputs", ArmInputs, queue_size=0)
-        self.killswitch_pub      = rospy.Publisher('arm_killswitch', UInt8, queue_size=0)
+        # Subscriber
+        self.joy_sub = self.create_subscription(Joy, "arm/joy", self.getROSJoy, 10)
+
+
 
         ## Variables for serial connections
         # Device Names
@@ -86,29 +96,34 @@ class Controller():
         #     else:
         #         arm_servo.write_servo_low_angle()
         #         print("Servo going to 63 degrees configuration")
-        self.rate = rospy.Rate(30)
+        
+        # Timer loop at 30 Hz (ros2)
+        self.timer = self.create_timer(1.0 / 30.0, self.publish_loop)
+        # ROS 2 will automatically call publish_loop() every 1/30 seconds (i.e. 30 Hz)
+        # repeating background task — a timer callback that keeps firing automatically on the interval you specify.
+        
+        self.publishInputs = False
 
-        publishInputs = False
-        while not rospy.is_shutdown():
 
+    def publish_loop(self):
         # Print/Publish the inputs if state is neither Idle or Setup
-            if self.state != "Idle" and self.state != "Setup":
 
-                if publishInputs:
-                    self.input_pub.publish(self.values)
-                    print(self.values)
+        if self.state not in ["Idle", "Setup"]:
+            if self.publishInputs:
+                self.input_pub.publish(self.values)
+                self.get_logger().info(str(self.values))
 
-                if (abs(self.values.l_horizontal) >= 0.05 or abs(self.values.l_vertical) >= 0.05 or 
-                    abs(self.values.r_horizontal) >= 0.05 or abs(self.values.r_vertical) >= 0.05 or 
-                    self.values.l1 or self.values.r1 or self.values.l2 or self.values.r2 or
-                    self.values.x or self.values.o or self.values.triangle or self.values.share
-                    or self.values.options or self.values.r3):
-                    # self.input_pub.publish(self.values)
-                    publishInputs = True
-                else:
-                    publishInputs = False
+            if (abs(self.values.l_horizontal) >= 0.05 or abs(self.values.l_vertical) >= 0.05 or 
+                abs(self.values.r_horizontal) >= 0.05 or abs(self.values.r_vertical) >= 0.05 or 
+                self.values.l1 or self.values.r1 or self.values.l2 or self.values.r2 or
+                self.values.x or self.values.o or self.values.triangle or self.values.share or
+                self.values.options or self.values.r3):
+                self.publishInputs = True
+            else:
+                self.publishInputs = False
             
-                # # Check if the gripper motor is on
+                # # ROS 1 code  
+                # Check if the gripper motor is on
                 # if self.gripper:
                 
                 # # Check if the gripper is off, and if so, do we want it on
@@ -178,7 +193,7 @@ class Controller():
                 #         self.servo = not self.servo
                 
                 # Control rate sleep
-                self.rate.sleep()
+                # self.rate.sleep()
 
     def getROSJoy(self, joy_input : Joy) -> None:    
         ''' 
@@ -310,8 +325,8 @@ class Controller():
             self.killswitch_pub.publish(self.killswitch)
         
         # Printing state on the console and publishing it
-        print("State:", self.state, "\t killswitch:", bool(self.killswitch))
-        self.state_pub.publish(self.state)
+        self.get_logger().info(f"State: {self.state} \t killswitch: {bool(self.killswitch)}")
+        self.state_pub.publish(String(data=self.state))
             
         # #     if self.servo:
         # #         arm_servo.write_servo_high_angle()
@@ -346,16 +361,19 @@ class Controller():
     #         serviceResponse = correctionService() # input data into function to send to service, response contains boolean if succesfully updated or not
     #     except rospy.ServiceException as ex:
     #         print("Service call failed: %s"%ex)
- 
-if __name__ == "__main__":
- 
+
+
+def main(args=None):
+    rclpy.init(args=args)
+    controller_node = Controller()
     try:
-        rospy.init_node("Arm_Controller")
-        
-        Controller_Node = Controller()
-
-        rospy.spin()
-
-        
-    except rospy.ROSInterruptException:
+        rclpy.spin(controller_node)
+    except KeyboardInterrupt:
         pass
+    finally:
+        controller_node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()
