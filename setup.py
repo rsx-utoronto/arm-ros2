@@ -20,6 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-        ],
+    'arm_keyboard_controller = Controller.arm_keyboard_controller:main',
+    'arm_controller = Controller.arm_controller:main',
+    ]
     },
 )
