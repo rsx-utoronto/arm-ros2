@@ -1,20 +1,21 @@
 #! /usr/bin/env python3
 
-import rospy
+import rclpy
+from rclpy.node import Node
 from std_msgs.msg import String
-from rover.msg import ArmInputs
+from arm_ros2.msg import ArmInputs
 
 
 # Based on arm_keyboard_controller.py / Adapted for GUI control
 
-class GuiControllerNode():
+class GuiControllerNode(Node):
     def __init__(self) -> None:
-        rospy.init_node("arm_gui_controller")
+        super().__init__("arm_gui_controller")
 
         self.speedMultiplier = 1
 
-        self.inputPublisher = rospy.Publisher("arm_inputs", ArmInputs, queue_size=10)
-        self.statePublisher = rospy.Publisher("arm_state", String, queue_size=10)
+        self.inputPublisher = self.create_publisher(ArmInputs, "arm_inputs", 10)
+        self.statePublisher = self.create_publisher(String, "arm_state", 10)
         
     def on_press(self, command):
         GuiToController = ArmInputs()
@@ -75,10 +76,10 @@ class GuiControllerNode():
             # shape button emulation
             if command == "Open Grip" or command == "joint6plus":
                 GuiToController.x = 1 
-                print("grip opened!!!")
+                self.get_logger().info("grip opened!!!")
             if command == "Close Grip" or command == "joint6minus":
                 GuiToController.o = 1 
-                print("grip not opened!!!")
+                self.get_logger().info("grip not opened!!!")
             if command == "useless":
                 GuiToController.triangle = 1
             if command == "useless":
@@ -94,17 +95,25 @@ class GuiControllerNode():
                 
             # emulate d-pad as arrow keys
             if command == "Manual":
-                self.statePublisher.publish("Manual")
+                msg = String()
+                msg.data = "Manual"
+                self.statePublisher.publish(msg)
                 self.speedMultiplier = 1#6900
             if command == "Inverse Kin":
-                self.statePublisher.publish("IK")
+                msg = String()
+                msg.data = "IK"
+                self.statePublisher.publish(msg)
                 self.speedMultiplier = 1#69
             if command == "Setup":
-                self.statePublisher.publish("Setup")
+                msg = String()
+                msg.data = "Setup"
+                self.statePublisher.publish(msg)
             if command == "Idle":
-                self.statePublisher.publish("Idle")
-        except:
-            print("error!")
+                msg = String()
+                msg.data = "Idle"
+                self.statePublisher.publish(msg)
+        except Exception as e:
+            self.get_logger().error(f"Error in on_press: {e}")
 
         # Only joint 5 (the slow moving one) is published 100 times
         # (TEMPORARY FIX) 
@@ -132,9 +141,18 @@ class GuiControllerNode():
         keyboardToController.r3           = 0
 
         self.inputPublisher.publish(keyboardToController)
+
+def main(args=None):
+    rclpy.init(args=args)
+    try:
+        gui_controller_node = GuiControllerNode()
+        rclpy.spin(gui_controller_node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if 'gui_controller_node' in locals():
+            gui_controller_node.destroy_node()
+        rclpy.shutdown()
         
 if __name__ == "__main__":
-    # try:
-    KeyInputNode = GuiControllerNode()
-    # except Exception as ex:
-        # print(ex)
+    main()

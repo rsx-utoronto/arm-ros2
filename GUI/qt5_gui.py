@@ -2,10 +2,11 @@
 
 from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QLineEdit, QComboBox, QSlider, QGridLayout, QGroupBox, QSpinBox
 from PyQt5.QtGui import QPixmap, QIcon, QImage
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 import sys
 import os
-import rospy
+import rclpy
+from rclpy.node import Node
 from std_msgs.msg import Float32MultiArray
 from math import pi
 import yaml
@@ -18,8 +19,9 @@ from arm_gui_controller import GuiControllerNode  # Class for sending commands t
 from ik_library import createDHTable, calculateTransformToLink, calculateRotationAngles, createTransformationMatrix
 
 class RobotControlGUI(QWidget):
-    def __init__(self):
+    def __init__(self, node):
         super().__init__()
+        self.node = node
         self.setWindowTitle("Robot Control Interface")
 
         screen = QApplication.primaryScreen()  # Get primary screen (default monitor)
@@ -52,10 +54,20 @@ class RobotControlGUI(QWidget):
         self.controller = GuiControllerNode()  # Initialize controller
         
         # Get the arm effector positions
-        self.end_effector_coords = rospy.Subscriber("arm_end_effector_pos", Float32MultiArray, self.update_end_effector_coords) 
+        self.end_effector_coords = self.node.create_subscription(
+            Float32MultiArray, 
+            "arm_end_effector_pos", 
+            self.update_end_effector_coords, 
+            10
+        ) 
 
         # Update the joint display values
-        self.joint_display_values = rospy.Subscriber("arm_curr_pos", Float32MultiArray, self.set_joint_display)
+        self.joint_display_values = self.node.create_subscription(
+            Float32MultiArray, 
+            "arm_curr_pos", 
+            self.set_joint_display, 
+            10
+        )
 
         # The default mode when you start the GUI is Idle
         self.mode_buttons["Idle"].click()
@@ -183,8 +195,10 @@ class RobotControlGUI(QWidget):
 
     # Switch camera feeds
     def on_view_selected(self, index):
-        self.video_subscriber.sub.unregister()
-        self.video_subscriber = ROSVideoSubscriber(self.camera_topic_name[index], self.camera_compressed[index])
+        # Destroy the old subscription
+        if hasattr(self.video_subscriber, 'sub'):
+            self.node.destroy_subscription(self.video_subscriber.sub)
+        self.video_subscriber = ROSVideoSubscriber(self.node, self.camera_topic_name[index], self.camera_compressed[index])
         self.video_subscriber.frame_received.connect(self.update_image)
 
     # Update the end effector coordinate section
@@ -278,7 +292,7 @@ class RobotControlGUI(QWidget):
         view_layout.addWidget(self.coord_view_label)
 
         # Initialize the ROS video subscriber
-        self.video_subscriber = ROSVideoSubscriber(self.camera_topic_name[0],self.camera_compressed[0])
+        self.video_subscriber = ROSVideoSubscriber(self.node, self.camera_topic_name[0], self.camera_compressed[0])
         self.video_subscriber.frame_received.connect(self.update_image)
 
         self.camera_view_box.currentIndexChanged.connect(self.on_view_selected)
@@ -479,8 +493,41 @@ class RobotControlGUI(QWidget):
         #main_vertical_layout.addLayout(bottom_layout)
         self.setLayout(main_vertical_layout)
 
-if __name__ == "__main__":
+class GuiNode(Node):
+    def __init__(self):
+        super().__init__('robot_gui_node')
+        self.get_logger().info('Robot GUI Node initialized')
+
+def main(args=None):
+    # Initialize ROS2
+    rclpy.init(args=args)
+    
+    # Create Qt application
     app = QApplication(sys.argv)
-    window = RobotControlGUI()
-    window.show()
-    sys.exit(app.exec())
+    
+    try:
+        # Create ROS2 node
+        gui_node = GuiNode()
+        
+        # Create GUI with the node
+        window = RobotControlGUI(gui_node)
+        window.show()
+        
+        # Create a QTimer to periodically spin the ROS2 node
+        timer = QTimer()
+        timer.timeout.connect(lambda: rclpy.spin_once(gui_node, timeout_sec=0.01))
+        timer.start(10)  # 10ms = 100Hz
+        
+        # Run the Qt event loop
+        exit_code = app.exec()
+        
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if 'gui_node' in locals():
+            gui_node.destroy_node()
+        rclpy.shutdown()
+        sys.exit(exit_code)
+
+if __name__ == "__main__":
+    main()

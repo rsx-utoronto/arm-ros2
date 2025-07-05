@@ -1,4 +1,5 @@
-import rospy
+import rclpy
+from rclpy.node import Node
 import cv2
 from PyQt5.QtCore import pyqtSignal, QObject
 from PyQt5.QtGui import QImage
@@ -9,12 +10,13 @@ import numpy as np
 class ROSVideoSubscriber(QObject):
     frame_received = pyqtSignal(QImage)
 
-    def __init__(self, topic_name, compressed=False):
+    def __init__(self, node, topic_name, compressed=False):
         super().__init__()
+        self.node = node
         self.bridge = CvBridge()
         self.compressed = compressed
         msg_type = CompressedImage if compressed else Image
-        self.sub = rospy.Subscriber(topic_name, msg_type, self.callback)
+        self.sub = self.node.create_subscription(msg_type, topic_name, self.callback, 10)
 
     def callback(self, msg):
         try:
@@ -38,4 +40,4 @@ class ROSVideoSubscriber(QObject):
             self.frame_received.emit(qt_image)
 
         except Exception as e:
-            rospy.logerr(f"Error processing image: {e}")
+            self.node.get_logger().error(f"Error processing image: {e}")

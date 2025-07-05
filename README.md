@@ -2,7 +2,7 @@
 
 Welcome to `arm-ros2`! This repository will host the ROS 2 (Jazzy) version of the RSX arm control software, migrated from the `arm/` folder in the old ROS 1 `rsx-rover` repo. Proceed with caution.
 
-## 🚀 Prerequisites
+## Prerequisites
 
 Make sure you have the following:
 
@@ -69,7 +69,7 @@ source install/setup.bash
 Create a requirements.txt in the repo root that looks like this: 
 
 ```
-numpy
+numpy==[version]
 scipy
 geometry_msgs
 rclpy
@@ -176,8 +176,12 @@ If migrating custom `msg/`, `srv/`, or `action/` files:
       - Can be one of the previous two designs or something all new based on learned
       - Can be a block diagram with research and explanation
 
+<<<<<<< HEAD
   Example: (https://docs.google.com/document/d/1crGv72SZPlyTfEEYrCo4EamMKkqWRGyadf1QlVXck3k/edit?tab=t.0)
 
+=======
+ 
+>>>>>>> 59f99f9969848484fd33e52f05aab95b684c6208
 
 # Resources 
 Feel free to add any resources here: 
