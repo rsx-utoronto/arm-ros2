@@ -1,15 +1,28 @@
 #!/usr/bin/env python3
+<<<<<<< HEAD
 import rclpy
 from rclpy.node import Node
 
 import numpy as np
 
 from std_msgs.msg import Float32MultiArray, String, UInt8MultiArray
-from rover.msg import ArmInputs
+from arm_ros2.msg import ArmInputs
 
 ######################## CLASSES ##########################
 
 class Manual(Node):
+=======
+
+import numpy as np
+import time
+import rospy
+from rover.msg import ArmInputs
+from std_msgs.msg import *
+
+######################## CLASSES ##########################
+
+class Manual():
+>>>>>>> e506801 (Move ROS1 files to ROS2 repo)
     """
     (None)
     
@@ -18,7 +31,11 @@ class Manual(Node):
     """
 
     def __init__(self):
+<<<<<<< HEAD
         super().__init__('arm_manual')
+=======
+
+>>>>>>> e506801 (Move ROS1 files to ROS2 repo)
         ## Buffer for controller input
         # Idx - Associated Controller input:
         # 0 - Left analog horizonal
@@ -57,6 +74,7 @@ class Manual(Node):
         ## Variable for the status, start at idle
         self.status              = "Idle"
 
+<<<<<<< HEAD
         ## Subscribers 
         self.create_subscription(UInt8MultiArray, 'arm_error_msg', self.CallbackError, 10)
         self.create_subscription(String, 'arm_state', self.CallbackState, 10)
@@ -68,6 +86,17 @@ class Manual(Node):
         # self.SafePos_pub = self.create_publisher(Float32MultiArray, 'arm_safe_goal_pos', 10)
 
     def CallbackError (self, errors):
+=======
+        ## ROS topics: publishing and subscribing
+        self.error               = rospy.Subscriber("arm_error_msg", UInt8MultiArray, self.CallbackError)
+        self.state               = rospy.Subscriber("arm_state", String, self.CallbackState)
+        self.input               = rospy.Subscriber("arm_inputs", ArmInputs, self.CallbackInput)
+        self.err_offset          = rospy.Subscriber("arm_error_offset", Float32MultiArray, self.CallbackErrOffset)
+        self.goal                = rospy.Publisher("arm_goal_pos", Float32MultiArray)
+        #self.SafePos_pub          = rospy.Publisher("arm_safe_goal_pos", Float32MultiArray, queue_size= 0)
+
+    def CallbackError (self, errors: UInt8MultiArray) -> None:
+>>>>>>> e506801 (Move ROS1 files to ROS2 repo)
         """
         (UInt8MultiArray) -> (None)
 
@@ -147,7 +176,11 @@ class Manual(Node):
             # Update goal positions and print/publish them
             self.goal_pos.data = self.update_pos(self.controller_input, self.goal_pos.data, 
                                                 self.SPEED_LIMIT)
+<<<<<<< HEAD
             self.get_logger().info(str(self.goal_pos.data))
+=======
+            print(self.goal_pos.data)
+>>>>>>> e506801 (Move ROS1 files to ROS2 repo)
             self.goal.publish(self.goal_pos)
         
     def update_pos(self, joy_input : list, curr_goal_pos : list, speed_limit : list) -> list:   
@@ -173,6 +206,7 @@ class Manual(Node):
 
 ############################## MAIN ############################
 
+<<<<<<< HEAD
 def main(args=None):
 
     try:
@@ -185,5 +219,20 @@ def main(args=None):
         pass
 
 if __name__ == '__main__':
+=======
+def main():
+
+    try:
+        rospy.init_node("Arm_Manual")
+        
+        Manual_Node = Manual()
+
+        rospy.spin()
+
+    except rospy.ROSInterruptException:
+        pass
+
+if __name__ == "__main__":
+>>>>>>> e506801 (Move ROS1 files to ROS2 repo)
 
     main()
