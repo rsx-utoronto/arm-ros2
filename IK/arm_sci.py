@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-import rospy
+import rclpy
+from rclpy.node import Node
 from math import pi, atan2, sin, cos, sqrt, acos
 from arm_science_ik import SciArm
 from queue import Queue
@@ -8,13 +9,15 @@ from std_msgs.msg import Float32MultiArray, String
 from numpy import deg2rad, rad2deg
 from rover.msg import ArmInputs
 
-class ArmSciNode():
+class ArmSciNode(Node):
     def __init__(self):
+        super().__init__('arm_sci')
         self.armState = "Idle"
         self.joyInputQueue = Queue(maxsize=5)
         self.curAngleQueue = Queue(maxsize=5)
         self.joyInput = []
 
+        # Arm configuration
         dhTable = [[79.7, 0, 0, pi/2],
                    [0,    0, 367, 0],
                    [0,    0, 195, 0],
@@ -38,15 +41,18 @@ class ArmSciNode():
         self.arm = SciArm(5, dhTable, offsets, angleOrientation, startingAngles)
         self.sparkMaxOfssets = [0]*len(angleOrientation)
 
-        rospy.init_node("arm_sci")
-        self.rate = rospy.Rate(30)
+        # Publishers
+        self.goalPub = self.create_publisher(Float32MultiArray, "arm_goal_pos", 10)
+        self.vizPub = self.create_publisher(Float32MultiArray, "arm_viz_pos", 10)
 
-        self.goalPub = rospy.Publisher("arm_goal_pos", Float32MultiArray, queue_size=10)
-        self.vizPub = rospy.Publisher("arm_viz_pos", Float32MultiArray, queue_size=10)
+        # Subscribers
+        self.create_subscription(String, "arm_state", self.onArmStateUpdate, 10)
+        self.create_subscription(ArmInputs, "arm_inputs", self.onJoystickUpdate, 10)
+        self.create_subscription(Float32MultiArray, "arm_curr_pos", self.onCurrPosUpdate, 10)
 
-        rospy.Subscriber("arm_state", String, self.onArmStateUpdate)
-        rospy.Subscriber("arm_inputs", ArmInputs, self.onJoystickUpdate)
-        rospy.Subscriber("arm_curr_pos", Float32MultiArray, self.onCurrPosUpdate)
+        # Timer for main loop
+        self.create_timer(1.0 / 30, self.main)  # main function inside this class will be called at initialization
+        # and will be called every 1/30 seconds
 
 
     def handle_sampling_sequence(self):
@@ -142,6 +148,7 @@ class ArmSciNode():
         rawCurAngles = data.data
         correctedOrientation = [rawCurAngles[0], rawCurAngles[1], rawCurAngles[2],
                                 rawCurAngles[3], rawCurAngles[4]]
+        #correctedOrientation = [rawCurAngles[i] for i in range(5)]
         offsetsRemovedAngles = self.arm.removeSparkMaxOffsets(deg2rad(correctedOrientation))
         self.curAngleQueue.put(offsetsRemovedAngles)
 
@@ -182,55 +189,41 @@ class ArmSciNode():
         pass
 
     def main(self):
-        print(f'------ {self.arm.curMode} ------')
-        while not rospy.is_shutdown():
-            # deal with controller input queue 
-            # do IK
-            # publish target if state allows it
+        if not self.curAngleQueue.empty():
+            self.arm.setCurAngles(self.curAngleQueue.get())
 
-            if not self.curAngleQueue.empty():
-                self.arm.setCurAngles(self.curAngleQueue.get())
+        if not self.joyInputQueue.empty():
+            [buttonPressed, joystickStatus] = self.joyInputQueue.get()
+            [buttonPressed, joystickStatus] = self.joyInput
 
-            
-            if not self.joyInputQueue.empty():
-                [buttonPressed, joystickStatus] = self.joyInputQueue.get()
-                [buttonPressed, joystickStatus] = self.joyInput
+            if buttonPressed["TRIANGLE"] == 2:
+                self.arm.iterateMode()
+                self.get_logger().info(f"------ {self.arm.getCurMode()} ------")
+            if buttonPressed["CIRCLE"] == 2:
+                self.get_logger().info('------ Homed------')
+                self.arm.homeArm()
 
-                                # Add new button combination for sampling sequence
-                # if buttonPressed["L1"] and buttonPressed["R1"]:
-                #     self.handle_sampling_sequence()
-
-                if buttonPressed["TRIANGLE"] == 2:
-                    self.arm.iterateMode()
-                    print(f'------ {self.arm.curMode} ------')
-                if buttonPressed["CIRCLE"] == 2:
-                    # self.arm.storeSparkMaxOffsets(self.arm.curAngles)
-                    print('------ Homed------')
-                    self.arm.homeArm()
-
-                if self.armState == "IK" and self.arm.getCurMode() == "Cyl":
-                    self.arm.controlTarget(buttonPressed, joystickStatus)
-                    status = self.arm.inverseKinematics()
+            if self.armState == "IK" and self.arm.getCurMode() == "Cyl":
+                self.arm.controlTarget(buttonPressed, joystickStatus)
+                if self.arm.inverseKinematics():
                     goalAngles = self.arm.getOffsetGoalAngles()
                     self.publishAngles(goalAngles)
-                elif self.armState == "IK" and self.arm.getCurMode() == "Forward":
-                    self.arm.activeForwardKinematics(buttonPressed, joystickStatus)
-                    # angles offsets?
-                    goalAngles = self.arm.getOffsetGoalAngles()
-                    self.publishAngles(goalAngles)
+            elif self.armState == "IK" and self.arm.getCurMode() == "Forward":
+                self.arm.activeForwardKinematics(buttonPressed, joystickStatus)
+                goalAngles = self.arm.getOffsetGoalAngles()
+                self.publishAngles(goalAngles)
 
-                print(self.arm.getOffsetGoalAngles())
-                # print(buttonPressed)
-            
-            if self.armState != "IK":
-                # self.arm.passiveForwardKinematics()
-                pass
-
-            # rospy.loginfo(self.arm.cylTarget)
-            self.rate.sleep()
+            self.get_logger().info(str(self.arm.getOffsetGoalAngles()))
 
         
 
-if __name__ == "__main__":
+if __name__ == '__main__':
+    rclpy.init()
     node = ArmSciNode()
-    node.main()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
