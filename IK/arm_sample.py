@@ -1,74 +1,48 @@
 #!/usr/bin/env python3
 
-import rospy
-import numpy as np
+import rclpy
+from rclpy.node import Node
 from math import pi
 from std_msgs.msg import Float32MultiArray, Int32, Bool, String
 from geometry_msgs.msg import Point
 from arm_science_ik import SciArm
 
-class ArraySamplingNode:
+class ArraySamplingNode(Node):
     def __init__(self):
-        rospy.init_node('array_sampling_node')
-        
-        # Initialize parameters
-        self.rate = rospy.Rate(30)  # 30Hz update rate
+        super().__init__('array_sampling_node')
+
+        self.rate_hz = 30
         self.current_sequence = []
         self.is_executing = False
         self.current_position = None
-        
-        # Get ROS parameters
-        self.dh_table = [[79.7, 0, 0, 0],
-                        [0, 0, 367, 0],
-                        [0, 0, 195, 0],
-                        [0, 0, 67, 0],
-                        [92, 0, 0, 0]]
+
+        # Define DH parameters
+        dh_table = [[79.7, 0, 0, 0],
+                    [0, 0, 367, 0],
+                    [0, 0, 195, 0],
+                    [0, 0, 67, 0],
+                    [92, 0, 0, 0]]
         
         # Initialize arm
-        self.arm = SciArm(5, self.dh_table)
+        self.arm = SciArm(5, dh_table)
         
         # Define array sampling positions
         self.setup_array_positions()
         
         # Publishers
-        self.goal_pub = rospy.Publisher(
-            'arm_goal_pos', 
-            Float32MultiArray, 
-            queue_size=10
-        )
-        self.status_pub = rospy.Publisher(
-            'array_sampling_status', 
-            String, 
-            queue_size=10
-        )
-        self.position_reached_pub = rospy.Publisher(
-            'position_reached', 
-            Bool, 
-            queue_size=10
-        )
-        
+        self.goal_pub = self.create_publisher(Float32MultiArray, 'arm_goal_pos', 10)
+        self.status_pub = self.create_publisher(String, 'array_sampling_status', 10)
+        self.position_reached_pub = self.create_publisher(Bool, 'position_reached', 10)
+
         # Subscribers
-        rospy.Subscriber(
-            'start_array_sampling', 
-            Int32, 
-            self.start_sampling_callback
-        )
-        rospy.Subscriber(
-            'arm_curr_pos', 
-            Float32MultiArray, 
-            self.current_position_callback
-        )
-        rospy.Subscriber(
-            'abort_sampling', 
-            Bool, 
-            self.abort_callback
-        )
-        
-        # Service to get available positions
-        self.available_positions = {}
-        self.setup_array_positions()
-        
-        rospy.loginfo("Array sampling node initialized")
+        self.create_subscription(Int32, 'start_array_sampling', self.start_sampling_callback, 10)
+        self.create_subscription(Float32MultiArray, 'arm_curr_pos', self.current_position_callback, 10)
+        self.create_subscription(Bool, 'abort_sampling', self.abort_callback, 10)
+
+        # Main loop timer
+        self.create_timer(1.0 / self.rate_hz, self.execute_sequence)
+
+        self.get_logger().info("Array sampling node initialized")
 
     def setup_array_positions(self):
         """
@@ -81,7 +55,6 @@ class ArraySamplingNode:
             'pre_sample': [0, 350, 200, -pi/4],
             'deposit': [pi/2, 400, 300, -pi/4],
         }
-        
         # Array sampling positions
         array_positions = [
             [0, 350, 0, -pi/2],      # Position 1
@@ -212,18 +185,17 @@ class ArraySamplingNode:
             self.current_sequence = []
             self.publish_status("Failed to reach target position")
 
-    def run(self):
-        """
-        Main run loop
-        """
-        while not rospy.is_shutdown():
-            if self.is_executing:
-                self.execute_sequence()
-            self.rate.sleep()
+def main():
+    rclpy.init()
+    node = ArraySamplingNode()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
 
 if __name__ == '__main__':
-    try:
-        node = ArraySamplingNode()
-        node.run()
-    except rospy.ROSInterruptException:
-        pass
+    main()
