@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
 
-# Due to the complexity and size of arm_inverse_kinematics.py, this will be migrated in stages.
-# Stage 1 focuses on ROS 2 structure, node, and publisher/subscriber migration.
-# Remaining logic will be progressively ported in follow-up iterations.
-
 import rospy
 import numpy as np
 import ik_library as ik

@@ -1,77 +1,89 @@
 #! /usr/bin/env python3
-import rospy
+
+import rclpy
+from rclpy.node import Node
 from std_msgs.msg import String, Float32MultiArray
-from rover.msg import ArmInputs
+
+from rover.msg import ArmInputs  # Replace with your actual msg definition
 
 '''
 This code is just to help debug arm control code when
 the real arm isn't plugged in an manual is needed
 '''
 
-class FakeManualNode():
-    def __init__(self) -> None:
-        rospy.init_node("fake_manual")
-        self.armAngles = [0, 0, 0, 0, 0, 0]
+class FakeManualNode(Node):
+    def __init__(self):
+        super().__init__('fake_manual')
 
-        self.jointPublisher = rospy.Publisher("arm_goal_pos", Float32MultiArray, queue_size=10)
-        self.realJointPublisher = rospy.Publisher("arm_curr_pos", Float32MultiArray, queue_size=10)
-        self.curState = "Idle"
+        self.arm_angles = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        self.state = "Idle"
         self.scale = 0.0001
 
-        rospy.Subscriber("arm_state", String, self.updateStates)
-        rospy.Subscriber("arm_goal_pos", Float32MultiArray, self.updateRealAngles)
-        rospy.Subscriber("arm_inputs", ArmInputs, self.updateController)
+        # Publishers
+        self.joint_pub = self.create_publisher(Float32MultiArray, 'arm_goal_pos', 10)
+        self.real_joint_pub = self.create_publisher(Float32MultiArray, 'arm_curr_pos', 10)
+
+        # Subscribers
+        self.create_subscription(String, 'arm_state', self.update_states, 10)
+        self.create_subscription(Float32MultiArray, 'arm_goal_pos', self.update_real_angles, 10)
+        self.create_subscription(ArmInputs, 'arm_inputs', self.update_controller, 10)
 
 
-    def updateStates(self, data):
+    def updateStates(self, msg):
         ''' Callback function for the /arm_states topic'''
-        self.curState = data.data
-        anglesToPublish = Float32MultiArray()
-        anglesToPublish.data = self.armAngles
-        self.jointPublisher.publish(anglesToPublish)
-        self.realJointPublisher.publish(anglesToPublish)
+        self.state = msg.data
+        angles_msg = Float32MultiArray()
+        angles_msg.data = self.arm_angles
+        self.joint_pub.publish(angles_msg)
+        self.real_joint_pub.publish(angles_msg)
 
-    def updateController(self, data):
+    def updateController(self, msg):
         ''' Callback function for /arm_inputs 
 
             Recieves the ArmInput ros message and uses the values to change
             the arm angles that fake manual thinks it's at.
         '''
 
-        if self.curState == "Manual":
-            self.armAngles[0] += data.l_horizontal*self.scale
-            self.armAngles[1] += data.l_vertical*self.scale
-            self.armAngles[2] += data.r_horizontal*self.scale
-            self.armAngles[3] += data.r_vertical*self.scale
-            self.armAngles[4] += (data.l1 - data.r1)*self.scale
-            self.armAngles[5] += (data.l2 - data.r2)*self.scale
+        if self.state != "Manual":
+            return
 
-            anglesToPublish = Float32MultiArray()
-            anglesToPublish.data = self.armAngles
-            self.jointPublisher.publish(anglesToPublish)
-            self.realJointPublisher.publish(anglesToPublish)
+        self.arm_angles[0] += msg.l_horizontal * self.scale
+        self.arm_angles[1] += msg.l_vertical * self.scale
+        self.arm_angles[2] += msg.r_horizontal * self.scale
+        self.arm_angles[3] += msg.r_vertical * self.scale
+        self.arm_angles[4] += (msg.l1 - msg.r1) * self.scale
+        self.arm_angles[5] += (msg.l2 - msg.r2) * self.scale
+
+        angles_msg = Float32MultiArray()
+        angles_msg.data = self.arm_angles
+        self.joint_pub.publish(angles_msg)
+        self.real_joint_pub.publish(angles_msg)
             #print(armAngles)
 
-    def updateRealAngles(self, data):
+    def updateRealAngles(self, msg):
         ''' Callback function for /arm_goal_pos topic
 
         Idealized version of manual with no saftey
         '''
-        if self.curState != "Manual":
+        if self.state == "Manual":
+            return
 
-            tempList = list(data.data)
-            # tempList[0] = tempList[0]
-            # tempList[1] = -tempList[1]
-            # tempList[4] = -tempList[4]
-            self.armAngles = tempList
-            # print(tempList)
-            anglesToPublish = Float32MultiArray()
-            anglesToPublish.data = self.armAngles
-            self.realJointPublisher.publish(anglesToPublish)
+        self.arm_angles = list(msg.data)
+        angles_msg = Float32MultiArray()
+        angles_msg.data = self.arm_angles
+        self.real_joint_pub.publish(angles_msg)
 
-if __name__ == "__main__":
+def main():
+    rclpy.init()
+    node = FakeManualNode()
     try:
-        fakeManual = FakeManualNode()
-        rospy.spin()
-    except Exception as ex:
-        print(ex)
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
