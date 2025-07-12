@@ -1,28 +1,15 @@
 #!/usr/bin/env python3
-<<<<<<< HEAD
 import rclpy
 from rclpy.node import Node
 
 import numpy as np
 
 from std_msgs.msg import Float32MultiArray, String, UInt8MultiArray
-from arm_ros2.msg import ArmInputs
+# from rover.msg import ArmInputs
 
 ######################## CLASSES ##########################
 
 class Manual(Node):
-=======
-
-import numpy as np
-import time
-import rospy
-from rover.msg import ArmInputs
-from std_msgs.msg import *
-
-######################## CLASSES ##########################
-
-class Manual():
->>>>>>> e506801 (Move ROS1 files to ROS2 repo)
     """
     (None)
     
@@ -31,11 +18,7 @@ class Manual():
     """
 
     def __init__(self):
-<<<<<<< HEAD
         super().__init__('arm_manual')
-=======
-
->>>>>>> e506801 (Move ROS1 files to ROS2 repo)
         ## Buffer for controller input
         # Idx - Associated Controller input:
         # 0 - Left analog horizonal
@@ -74,11 +57,10 @@ class Manual():
         ## Variable for the status, start at idle
         self.status              = "Idle"
 
-<<<<<<< HEAD
         ## Subscribers 
         self.create_subscription(UInt8MultiArray, 'arm_error_msg', self.CallbackError, 10)
         self.create_subscription(String, 'arm_state', self.CallbackState, 10)
-        self.create_subscription(ArmInputs, 'arm_inputs', self.CallbackInput, 10)
+        # self.create_subscription(ArmInputs, 'arm_inputs', self.CallbackInput, 10)
         self.create_subscription(Float32MultiArray, 'arm_error_offset', self.CallbackErrOffset, 10)
 
         ## Publisher
@@ -86,17 +68,6 @@ class Manual():
         # self.SafePos_pub = self.create_publisher(Float32MultiArray, 'arm_safe_goal_pos', 10)
 
     def CallbackError (self, errors):
-=======
-        ## ROS topics: publishing and subscribing
-        self.error               = rospy.Subscriber("arm_error_msg", UInt8MultiArray, self.CallbackError)
-        self.state               = rospy.Subscriber("arm_state", String, self.CallbackState)
-        self.input               = rospy.Subscriber("arm_inputs", ArmInputs, self.CallbackInput)
-        self.err_offset          = rospy.Subscriber("arm_error_offset", Float32MultiArray, self.CallbackErrOffset)
-        self.goal                = rospy.Publisher("arm_goal_pos", Float32MultiArray)
-        #self.SafePos_pub          = rospy.Publisher("arm_safe_goal_pos", Float32MultiArray, queue_size= 0)
-
-    def CallbackError (self, errors: UInt8MultiArray) -> None:
->>>>>>> e506801 (Move ROS1 files to ROS2 repo)
         """
         (UInt8MultiArray) -> (None)
 
@@ -141,47 +112,43 @@ class Manual():
         # Updates state
         self.status = status.data
 
-    def CallbackInput (self, inputs: ArmInputs) -> None:
-        """
-        (ArmInputs) -> (None)
+    # def CallbackInput (self, inputs: ArmInputs) -> None:
+    #     """
+    #     (ArmInputs) -> (None)
 
-        Recieves inputs from controller and if state is "Manual",
-        updates the goal positions and publishes them
+    #     Recieves inputs from controller and if state is "Manual",
+    #     updates the goal positions and publishes them
         
-        Also has option of kill switch
+    #     Also has option of kill switch
 
-        @parameters
+    #     @parameters
 
-        inputs (ArmInputs): Stores the received inputs from controller node
-        """
+    #     inputs (ArmInputs): Stores the received inputs from controller node
+    #     """
 
-        # Get inputs from controller
-        self.controller_input[0] = inputs.l_horizontal
-        self.controller_input[1] = inputs.l_vertical
-        self.controller_input[2] = inputs.r_vertical
-        self.controller_input[3] = inputs.r_horizontal
-        self.controller_input[4] = inputs.l1 - inputs.r1
-        self.controller_input[5] = inputs.l2 - inputs.r2
-        self.controller_input[6] = inputs.x - inputs.o  # Added Gripper open/close, check if correct (x open and o close)
+    #     # Get inputs from controller
+    #     self.controller_input[0] = inputs.l_horizontal
+    #     self.controller_input[1] = inputs.l_vertical
+    #     self.controller_input[2] = inputs.r_vertical
+    #     self.controller_input[3] = inputs.r_horizontal
+    #     self.controller_input[4] = inputs.l1 - inputs.r1
+    #     self.controller_input[5] = inputs.l2 - inputs.r2
+    #     self.controller_input[6] = inputs.x - inputs.o  # Added Gripper open/close, check if correct (x open and o close)
 
-        # Print Statement for console view
-        #print("State:", self.status)
+    #     # Print Statement for console view
+    #     #print("State:", self.status)
 
-        # Apply amy offsets as necessary
-        #self.goal_pos.data      = list(np.array(self.goal_pos.data) - np.array(self.error_offsets))
+    #     # Apply amy offsets as necessary
+    #     #self.goal_pos.data      = list(np.array(self.goal_pos.data) - np.array(self.error_offsets))
         
-        # Checking the state, only proceed if in manual
-        if self.status == "Manual":
+    #     # Checking the state, only proceed if in manual
+    #     if self.status == "Manual":
 
-            # Update goal positions and print/publish them
-            self.goal_pos.data = self.update_pos(self.controller_input, self.goal_pos.data, 
-                                                self.SPEED_LIMIT)
-<<<<<<< HEAD
-            self.get_logger().info(str(self.goal_pos.data))
-=======
-            print(self.goal_pos.data)
->>>>>>> e506801 (Move ROS1 files to ROS2 repo)
-            self.goal.publish(self.goal_pos)
+    #         # Update goal positions and print/publish them
+    #         self.goal_pos.data = self.update_pos(self.controller_input, self.goal_pos.data, 
+    #                                             self.SPEED_LIMIT)
+    #         self.get_logger().info(str(self.goal_pos.data))
+    #         self.goal.publish(self.goal_pos)
         
     def update_pos(self, joy_input : list, curr_goal_pos : list, speed_limit : list) -> list:   
         """
@@ -206,9 +173,8 @@ class Manual():
 
 ############################## MAIN ############################
 
-<<<<<<< HEAD
 def main(args=None):
-
+    print("Manual runs")
     try:
         rclpy.init(args=args)
         Manual_Node = Manual()
@@ -219,20 +185,5 @@ def main(args=None):
         pass
 
 if __name__ == '__main__':
-=======
-def main():
-
-    try:
-        rospy.init_node("Arm_Manual")
-        
-        Manual_Node = Manual()
-
-        rospy.spin()
-
-    except rospy.ROSInterruptException:
-        pass
-
-if __name__ == "__main__":
->>>>>>> e506801 (Move ROS1 files to ROS2 repo)
 
     main()
